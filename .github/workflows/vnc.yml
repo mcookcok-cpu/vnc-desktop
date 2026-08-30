@@ -1,0 +1,50 @@
+name: Linux VNC Desktop
+
+on:
+  workflow_dispatch:
+    inputs:
+      password:
+        description: 'VNC Password'
+        required: true
+        default: 'password123'
+
+jobs:
+  vnc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies (XFCE4 & TigerVNC)
+      run: |
+        sudo apt update
+        sudo apt install -y xfce4 xfce4-goodies tigervnc-standalone-server curl wget unzip
+
+    - name: Setup VNC Password & Configuration
+      run: |
+        mkdir -p ~/.vnc
+        echo "${{ github.event.inputs.password }}" | vncpasswd -f > ~/.vnc/passwd
+        chmod 600 ~/.vnc/passwd
+        echo -e "#!/bin/bash\nxrdb $HOME/.Xresources\nstartxfce4 &" > ~/.vnc/xstartup
+        chmod +x ~/.vnc/xstartup
+
+    - name: Start VNC Server
+      run: |
+        vncserver :1 -geometry 1280x800 -depth 24
+
+    - name: Expose via Cloudflare Tunnel
+      run: |
+        curl -L --output cloudflared https://github.com/cloudflare/cloudflare-warp/releases/download/v0/cloudflared-linux-amd64 || true
+        # Menggunakan cloudflared resmi
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O cloudflared
+        chmod +x cloudflared
+        ./cloudflared tunnel --url http://localhost:5901 &
+        sleep 5
+        ps aux | grep cloudflared
+
+    - name: Keep Runner Alive
+      run: |
+        echo "VNC Server is running! Connect using a VNC viewer or check Cloudflare Tunnel URL above."
+        sleep infinity
